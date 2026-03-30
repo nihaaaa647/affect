@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { fetchEconNews } from "@/lib/newsApi";
+import { fetchEconNews, fetchEconNewsWeekly } from "@/lib/newsApi";
 import { getWalletImpact } from "@/lib/openrouter";
 import { buildPrompt } from "@/lib/prompt";
 import { ArticleWithImpact, UserProfile } from "@/lib/types";
@@ -21,6 +21,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [articles, setArticles] = useState<ArticleWithImpact[]>([]);
+  const [weeklyArticles, setWeeklyArticles] = useState<ArticleWithImpact[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,10 +39,16 @@ export default function FeedPage() {
     async function loadFeed() {
       try {
         setLoading(true);
-        const rawArticles = await fetchEconNews();
+        const [rawArticles, rawWeekly] = await Promise.all([
+          fetchEconNews(),
+          fetchEconNewsWeekly()
+        ]);
         
         // Removing duplicate articles (common in news APIs) to prevent key collision errors
         const uniqueArticles = rawArticles.filter((article, index, self) => 
+          index === self.findIndex((a) => a.id === article.id)
+        );
+        const uniqueWeekly = rawWeekly.filter((article, index, self) => 
           index === self.findIndex((a) => a.id === article.id)
         );
         
@@ -67,6 +74,26 @@ export default function FeedPage() {
         );
 
         setArticles(sorted);
+
+        const weeklyWithImpact = (await Promise.all(
+          uniqueWeekly.map(async (article) => {
+            try {
+              const prompt = buildPrompt(article, profile!);
+              const impact = await getWalletImpact(prompt, article.id);
+              const fullArticle = { ...article, impact };
+              articleCache[article.id] = fullArticle;
+              return fullArticle;
+            } catch (err) {
+              return null;
+            }
+          })
+        )).filter((a): a is ArticleWithImpact => a !== null);
+        
+        const weeklySorted = weeklyWithImpact.sort((a, b) => 
+          severityMap[b.impact.impactSeverity] - severityMap[a.impact.impactSeverity]
+        );
+        
+        setWeeklyArticles(weeklySorted);
       } catch (err: any) {
         setError(err.message || "Something went wrong reading the news.");
       } finally {
@@ -148,6 +175,25 @@ export default function FeedPage() {
           </div>
           <div className={mode === 'desktop' ? "grid grid-cols-2 gap-4" : "flex flex-col gap-3"}>
             {others.map((article) => (
+              <CompactCard 
+                key={article.id} 
+                article={article} 
+                onClick={() => router.push(`/article/${article.id}`)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {weeklyArticles.length > 0 && (
+        <section className="mt-12">
+          <div className="mb-4">
+            <span className="text-[9px] font-sans uppercase tracking-[0.4em] text-[var(--text-muted)]">
+              THIS WEEK'S TOP STORIES
+            </span>
+          </div>
+          <div className={mode === 'desktop' ? "grid grid-cols-2 gap-4" : "flex flex-col gap-3"}>
+            {weeklyArticles.map((article) => (
               <CompactCard 
                 key={article.id} 
                 article={article} 

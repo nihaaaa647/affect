@@ -38,7 +38,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   } else {
     // Structural constraints for normal pages based on device
     if (mode === 'desktop') {
-      wrapperClass += " lg:ml-[240px] max-w-[720px] mx-auto";
+      wrapperClass += " lg:ml-[240px] lg:w-[calc(100%-240px)] flex justify-center";
     } else if (mode === 'tablet' || mode === 'phone-desktop') {
       wrapperClass += " max-w-[600px] mx-auto";
     } else {
@@ -52,7 +52,9 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
       {mode === 'desktop' && !isOnboarding && !isRoot && <Sidebar />}
       
       <div className={wrapperClass}>
-        {children}
+        <div className={mode === 'desktop' && !isOnboarding && !isRoot ? "w-full max-w-[720px]" : "w-full"}>
+          {children}
+        </div>
       </div>
 
       {/* Show bottom nav on anything except true desktop */}
